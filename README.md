@@ -21,7 +21,7 @@
 2. **下载脚本**：从GitHub或其他提供的链接下载`invoice-rename.py`脚本及相关文件（如`config.ini`）。
 3. **安装依赖库**：打开命令行工具，导航到脚本所在目录，运行以下命令安装所需的Python库：
    
-'pip install requests pandas'
+`pip install requests pandas`
 
 5. **配置API密钥**：在`config.ini`文件中填入你的百度API的`APP_ID`、`API_KEY`、`SECRET_KEY`。
 
@@ -29,7 +29,7 @@
 
 1. **启动脚本**：在命令行中导航到脚本所在目录，运行：
    
-'python invoice-rename.py'
+`python invoice-rename.py`
 
 4. **选择文件夹**：在弹出的窗口中选择包含发票文件的文件夹。
 5. **处理文件**：脚本将自动处理文件夹中的所有支持的发票文件，并根据发票信息进行重命名。
