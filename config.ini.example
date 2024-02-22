@@ -1,0 +1,5 @@
+[BaiduAPI]
+APP_ID = your-appid
+API_KEY = your-api-key
+SECRET_KEY = your-secret-key
+
