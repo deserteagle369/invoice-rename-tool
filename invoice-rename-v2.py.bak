@@ -1,0 +1,139 @@
+import base64
+import configparser
+import os
+import requests
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import pandas as pd
+import datetime
+import re
+import urllib.parse
+import shutil
+
+# 尝试从环境变量获取配置信息
+APP_ID = os.getenv('APP_ID')
+API_KEY = os.getenv('API_KEY')
+SECRET_KEY = os.getenv('SECRET_KEY')
+
+if not all([APP_ID, API_KEY, SECRET_KEY]):
+    # 配置信息不完整，尝试读取config.ini文件
+    config_path = ".\\config.ini"
+    # 假设已经有函数load_config来处理读取config.ini的逻辑
+    # APP_ID, API_KEY, SECRET_KEY = load_config(config_path)
+    
+    if not all([APP_ID, API_KEY, SECRET_KEY]):
+        # 如果配置信息仍然不完整，提示用户
+        if not os.path.exists(config_path):
+            print("配置文件不存在，正在创建...")
+            # 可以复制 config.ini.example 为 config.ini
+            example_path = 'config.ini.example'
+            if os.path.exists(example_path):
+                with open(example_path) as example, open(config_path, 'w') as config:
+                    config.write(example.read())
+                    root = tk.Tk()
+                    root.withdraw()  # 隐藏主窗口
+                messagebox.showerror("配置错误", f"请编辑 {config_path} 文件并填写相应的配置信息。")
+            else:
+                messagebox.showerror("配置模板文件缺失", f"请确保 config.ini.example 文件存在。")    
+            exit(1)
+
+# Read the configuration file
+config = configparser.ConfigParser()
+config.read('config.ini')
+
+# Get the Baidu API access information from the configuration file
+APP_ID = config['BaiduAPI']['APP_ID']
+API_KEY = config['BaiduAPI']['API_KEY']
+SECRET_KEY = config['BaiduAPI']['SECRET_KEY']
+TOKEN_URL = config['BaiduAPI']['TOKEN_URL']
+OCR_URL = config['BaiduAPI']['OCR_URL']
+
+def get_access_token():
+    params = {'grant_type': 'client_credentials', 'client_id': API_KEY, 'client_secret': SECRET_KEY}
+    response = requests.post(TOKEN_URL, params=params)
+    if response:
+        return response.json().get('access_token')
+
+def get_file_content_as_base64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode('utf-8')
+
+def process_invoice(file_path, access_token, invoice_details):
+    file_extension = os.path.splitext(file_path)[1].lower()
+    if file_extension in ['.jpg', '.jpeg', '.png', '.bmp']:
+        payload = urllib.parse.urlencode({'image': get_file_content_as_base64(file_path)})
+    elif file_extension == '.pdf':
+        payload = urllib.parse.urlencode({'pdf_file': get_file_content_as_base64(file_path)})
+    elif file_extension == '.ofd':
+        payload = urllib.parse.urlencode({'ofd_file': get_file_content_as_base64(file_path)})
+    else:
+        print(f"Unsupported file format: {file_path}")
+        return False
+
+    response = requests.post(f"{OCR_URL}?access_token={access_token}", headers={'content-type': 'application/x-www-form-urlencoded'}, data=payload)
+    if response and 'words_result' in response.json():
+        words_result = response.json()['words_result']
+        invoice_date = re.sub(r'年|月', '-', words_result['InvoiceDate']).replace('日', '')
+        total_amount = words_result.get('AmountInFiguers', 'none')
+        seller_name = words_result.get('SellerName', 'none')
+        SellerRegisterNum = words_result.get('SellerRegisterNum', 'none')
+        ServiceType = words_result.get('ServiceType', 'none')
+        PurchaserName = words_result.get('PurchaserName', 'none')
+        PurchaserRegisterNum = words_result.get('PurchaserRegisterNum', 'none')
+        invoice_code = words_result.get('InvoiceCode', 'none')
+        invoice_number = words_result.get('InvoiceNum', 'none')
+        new_filename = f"{invoice_date} {total_amount} {seller_name} {invoice_code} {invoice_number}{file_extension}"
+        new_path = os.path.join(os.path.dirname(file_path), new_filename)
+        if not os.path.exists(new_path):
+            os.rename(file_path, new_path)
+        else:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
+            new_path = os.path.join(os.path.dirname(file_path), f"{invoice_date} {total_amount} {seller_name} {invoice_code} {invoice_number} {timestamp}{file_extension}")
+            os.rename(file_path, new_path)
+        invoice_details.append({
+            "开票日期": invoice_date,
+            "价税合计": total_amount,
+            "销售方名称": seller_name,
+            "销售方纳税人识别号": SellerRegisterNum,
+            "发票类型": ServiceType,
+            "购方名称": PurchaserName,
+            "购方纳税人识别号": PurchaserRegisterNum,
+            "发票代码": invoice_code,
+            "发票号码": invoice_number
+        })
+        return True
+    else:
+        return False
+
+def main():
+    root = tk.Tk()
+    root.withdraw()
+    directory = filedialog.askdirectory()
+    if not directory:
+        messagebox.showwarning("Warning", "No directory selected.")
+        return
+
+    access_token = get_access_token()
+    if not access_token:
+        messagebox.showerror("Error", "Failed to get access token.")
+        return
+
+    files_processed = 0
+    files_success = 0
+    invoice_details = []
+
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.pdf', '.ofd')):
+                if process_invoice(os.path.join(root, file), access_token, invoice_details):
+                    files_success += 1
+                files_processed += 1
+
+    if invoice_details:
+        df = pd.DataFrame(invoice_details)
+        df.to_excel(os.path.join(directory, 'invoice_details.xlsx'), index=False)
+
+    messagebox.showinfo("Complete", f"Processed {files_processed} files. {files_success} succeeded.")
+
+if __name__ == '__main__':
+    main()

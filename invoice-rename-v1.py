@@ -70,25 +70,44 @@ def get_access_token():
         print("Failed to retrieve access token.")
         return None
 
+def get_file_content_as_base64(path, urlencoded=False):
+    """
+    获取文件base64编码
+    :param path: 文件路径
+    :param urlencoded: 是否对结果进行urlencoded 
+    :return: base64编码信息
+    """
+    with open(path, "rb") as f:
+        content = base64.b64encode(f.read()).decode("utf8")
+        if urlencoded:
+            content = urllib.parse.quote_plus(content)
+    return content
+
 # Function to process a file for OCR
 def process_file(file_path, access_token, invoice_details):
     print(f"Processing file: {file_path}")
-    with open(file_path, 'rb') as f:
-        file_content = base64.b64encode(f.read()).decode()
-    
+    #with open(file_path, 'rb') as f:
+        #file_content = base64.b64encode(f.read()).decode("utf8")
+    #    file_content = base64.b64encode(f.read()).decode("utf8")
+    #    if urlencoded:
+    #        file_content = urllib.parse.quote_plus(content)
+    content=get_file_content_as_base64(file_path,True)
     file_extension = os.path.splitext(file_path)[1].lower()
     if file_extension in ['.jpg', '.jpeg', '.png', '.bmp']:
         params = {"image": file_content}
     elif file_extension == '.pdf':
         params = {"pdf_file": file_content}
     elif file_extension == '.ofd':
-        params = {"ofd_file": file_content}
+        params = 'ofd_file='&content&'seal_tag=false'
     else:
         print(f"Unsupported file format: {file_path}")
         return
 
     params = urllib.parse.urlencode(params)
-    headers = {'content-type': 'application/x-www-form-urlencoded'}
+    headers = {
+                "Accept": "application/json",
+               'content-type': 'application/x-www-form-urlencoded'
+                }
     request_url = f"{OCR_URL}?access_token={access_token}"
     response = requests.post(request_url, data=params, headers=headers)
 

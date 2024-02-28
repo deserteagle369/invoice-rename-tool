@@ -2,4 +2,5 @@
 APP_ID = your-appid
 API_KEY = your-api-key
 SECRET_KEY = your-secret-key
-
+TOKEN_URL = https://aip.baidubce.com/oauth/2.0/token
+OCR_URL = https://aip.baidubce.com/rest/2.0/ocr/v1/vat_invoice
